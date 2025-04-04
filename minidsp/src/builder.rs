@@ -40,8 +40,6 @@ pub struct DeviceOptions {
     kind: Option<DeviceKind>,
 }
 
-/// TODO: Copied from minidspd
-
 pub struct DeviceHandle {
     pub url: String,
 

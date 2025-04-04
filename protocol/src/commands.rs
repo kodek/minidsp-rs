@@ -640,7 +640,7 @@ impl Commands {
             Commands::ReadHardwareId => matches!(response, Responses::HardwareId { .. }),
             Commands::SetConfig { .. } => matches!(response, Responses::ConfigChanged),
             Commands::FirLoadStart { .. } => matches!(response, Responses::FirLoadSize { .. }),
-            &Commands::Unk07 { .. } => matches!(response, Responses::Unk02 { .. }),
+            &Commands::Unk07 { .. } => matches!(response, Responses::Unk02),
             &Commands::Read { .. } => matches!(response, Responses::Read { .. }),
             Commands::WriteMemory { .. }
             | Commands::SetSource { .. }

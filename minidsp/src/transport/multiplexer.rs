@@ -218,7 +218,7 @@ mod test {
             stream_tx.send(Ok(Responses::Ack)).await.unwrap();
 
             let cmd = sink_rx.next().await.unwrap();
-            assert!(matches!(cmd, Commands::ReadHardwareId { .. }));
+            assert!(matches!(cmd, Commands::ReadHardwareId));
             stream_tx
                 .send(Ok(Responses::HardwareId(HardwareId {
                     fw_major: 1,

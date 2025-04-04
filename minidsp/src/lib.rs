@@ -370,7 +370,7 @@ pub struct Input<'a> {
     spec: &'a device::Input,
 }
 
-impl<'a> Input<'a> {
+impl Input<'_> {
     /// Sets whether this input is routed to the given output
     pub async fn set_output_enable(&self, output_index: usize, value: bool) -> Result<()> {
         let dialect = self.dsp.dialect();
@@ -402,7 +402,7 @@ pub struct Output<'a> {
     spec: &'a device::Output,
 }
 
-impl<'a> Output<'a> {
+impl Output<'_> {
     /// Sets the output mute setting
     pub async fn set_invert(&self, value: bool) -> Result<()> {
         let dialect = self.dsp.dialect();

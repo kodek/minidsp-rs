@@ -17,7 +17,7 @@ where
     T::from_str(data).map_err(|e| Error::parameter_error(name, e))
 }
 
-pub async fn parse_body<'de, T: DeserializeOwned>(req: &mut Request<Body>) -> Result<T, Error> {
+pub async fn parse_body<T: DeserializeOwned>(req: &mut Request<Body>) -> Result<T, Error> {
     let data = body::to_bytes(req.body_mut())
         .await
         .map_err(|e| Error::ParseError {
