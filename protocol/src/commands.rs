@@ -12,22 +12,18 @@ use core::{convert::TryInto, fmt, fmt::Debug, ops::Deref, str::FromStr};
 use std::ops::DerefMut;
 
 use anyhow::Result;
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{Buf, BufMut, Bytes, BytesMut, TryGetError};
 #[cfg(feature = "use_serde")]
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "debug")]
 use thiserror::Error;
 
 use super::DeviceInfo;
-use crate::{
-    eeprom, packet::ParseError, util::TryBuf, util::TryBufError, FixedPoint, HardwareId,
-    MasterStatus,
-};
+use crate::{eeprom, packet::ParseError, FixedPoint, HardwareId, MasterStatus};
 
 /// Maximum number of floats that can be read in a single command
 pub const READ_FLOATS_MAX: usize = 14;
 
-#[derive(Clone)]
 #[cfg_attr(feature = "debug", derive(Debug, Error))]
 pub enum ProtocolError {
     #[cfg_attr(feature = "debug", error("bad cmd id"))]
@@ -46,7 +42,7 @@ pub enum ProtocolError {
     MalformedHardwareId,
 
     #[cfg_attr(feature = "debug", error("parse error: {0}"))]
-    DecodeError(#[from] TryBufError),
+    DecodeError(#[from] TryGetError),
 }
 
 #[derive(Clone)]
@@ -118,7 +114,7 @@ impl Value {
         }
     }
 
-    pub fn from_bytes(mut b: Bytes) -> Result<Self, TryBufError> {
+    pub fn from_bytes(mut b: Bytes) -> Result<Self, TryGetError> {
         Ok(
             if b.len() == 4 && ((b[0] != 0 || b[1] != 0) && b[2] == 0 && b[3] == 0) {
                 Value::Int(b.try_get_u16_le()?)
@@ -210,7 +206,7 @@ impl Addr {
         }
     }
 
-    pub fn read(buf: &mut Bytes, len: u8) -> Result<Self, TryBufError> {
+    pub fn read(buf: &mut Bytes, len: u8) -> Result<Self, TryGetError> {
         match len {
             2 => Self::read_u16(buf),
             3 => Self::read_u24(buf),
@@ -218,7 +214,7 @@ impl Addr {
         }
     }
 
-    pub fn read_u16(buf: &mut Bytes) -> Result<Self, TryBufError> {
+    pub fn read_u16(buf: &mut Bytes) -> Result<Self, TryGetError> {
         let mut val = buf.try_get_u16()?;
         let extra_bit = (val & 0x80_00) != 0;
 
@@ -231,7 +227,7 @@ impl Addr {
         })
     }
 
-    pub fn read_u24(buf: &mut Bytes) -> Result<Self, TryBufError> {
+    pub fn read_u24(buf: &mut Bytes) -> Result<Self, TryGetError> {
         let prefix = buf.try_get_u8()?;
         let extra_bit = (prefix & 0x80) != 0;
         let prefix = prefix & 0x0F;
