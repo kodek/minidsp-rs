@@ -50,37 +50,20 @@ impl From<&device_manager::Device> for Device {
 }
 
 fn get_device(app: &App, index: usize) -> Result<Arc<device_manager::Device>, Error> {
-    let devices = app
-        .device_manager
+    let device_manager = app.device_manager
         .as_ref()
-        .ok_or(Error::ApplicationStillInitializing)?
-        .devices();
-
-    // Try to find a device whose serial matches the index passed as an argument
-    let serial_match = devices.iter().find(|d| match d.device_info() {
-        Some(device_info) => device_info.serial == index as u32,
-        None => false,
-    });
-
-    if let Some(device) = serial_match {
-        return Ok(device.clone());
-    }
-
-    if index >= devices.len() {
-        return Err(Error::DeviceIndexOutOfRange {
-            actual: devices.len(),
-            provided: index,
-        });
-    }
-
-    Ok(devices[index].clone())
+        .ok_or(Error::ApplicationStillInitializing)?;
+    device_manager.get_device(index).ok_or(Error::DeviceNotReady)
 }
 
-fn get_device_instance<'dsp>(app: &App, index: usize) -> Result<MiniDSP<'dsp>, Error> {
-    get_device(app, index)?
-        .to_minidsp()
-        .ok_or(Error::DeviceNotReady)
+async fn get_device_instance<'dsp>(app: &App, index: usize) -> Result<MiniDSP<'dsp>, Error> {
+    let device_manager = app.device_manager
+        .as_ref()
+        .ok_or(Error::ApplicationStillInitializing)?;
+    let minidsp = device_manager.get_minidsp(index).await;
+    minidsp.ok_or(Error::DeviceNotReady)
 }
+
 
 /// Gets a list of available devices
 async fn get_devices(req: Request<Body>) -> Result<Response<Body>, Error> {
@@ -127,7 +110,7 @@ async fn get_master_status(req: Request<Body>) -> Result<Response<Body>, Error> 
 
     let app = super::APP.get().unwrap();
     let app = app.read().await;
-    let device = get_device_instance(&app, device_index)?;
+    let device = get_device_instance(&app, device_index).await?;
     let mut status = StatusSummary::fetch(&device).await?;
     let query_levels = req.query("levels").cloned();
     let query_poll = req.query("poll").cloned();
@@ -245,7 +228,7 @@ async fn post_master_status(mut req: Request<Body>) -> Result<Response<Body>, Er
 
     let app = super::APP.get().unwrap();
     let app = app.read().await;
-    let device = get_device_instance(&app, device_index)?;
+    let device = get_device_instance(&app, device_index).await?;
 
     // Apply the requested, changes, then fetch the master status again to return it
     let status: MasterStatus = parse_body(&mut req).await?;
@@ -263,7 +246,7 @@ async fn post_config(mut req: Request<Body>) -> Result<Response<Body>, Error> {
     let device_index: usize = parse_param(&req, "deviceIndex")?;
     let app = super::APP.get().unwrap();
     let app = app.read().await;
-    let device = get_device_instance(&app, device_index)?;
+    let device = get_device_instance(&app, device_index).await?;
 
     let config: Config = parse_body(&mut req).await?;
     config.apply(&device).await?;

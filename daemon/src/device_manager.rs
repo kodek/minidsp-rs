@@ -8,12 +8,7 @@ use std::{
 use anyhow::{anyhow, Result};
 use futures::{StreamExt, TryFutureExt};
 use minidsp::{
-    client::Client,
-    device::{self, probe},
-    logging,
-    transport::{self, SharedService},
-    utils::OwnedJoinHandle,
-    DeviceInfo, MiniDSP,
+    client::Client, device::{self, probe}, logging, transport::{self, SharedService}, utils::OwnedJoinHandle, DeviceInfo, MiniDSP, MiniDSPError
 };
 use tokio::sync::Mutex;
 use url2::Url2;
@@ -85,6 +80,71 @@ impl DeviceManager {
         DeviceManager { inner, handles }
     }
 
+    pub fn get_device(&self, index: usize) -> Option<Arc<Device>> {
+        let devices = self.devices();
+        let serial_match = devices.iter().find(|d| match d.device_info() {
+            Some(device_info) => device_info.serial == index as u32,
+            None => false,
+        });
+        if let Some(device) = serial_match {
+            return Some(device.clone());
+        }
+        if index >= devices.len() {
+            return None;
+        }
+        Some(devices[index].clone())
+    }
+
+    pub async fn get_minidsp(&self, index: usize) -> Option<MiniDSP<'static>> {
+        let mut attempts = 0;
+        let mut device = self.get_device(index)?;
+        loop {
+            attempts += 1;
+            let err = match device.to_minidsp() {
+                Ok(minidsp) => {
+                    let status = minidsp.get_master_status().await;
+                    if let Some(err) = status.err() {
+                        err
+                    } else {
+                        return Some(minidsp);
+                    }
+                }
+                Err(err) => err,
+            };
+            log::warn!(
+                "failed to connect to device {} (attempt {}): {}",
+                device.url,
+                attempts,
+                err
+            );
+            if attempts > 3 || !err.is_retryable() {
+                log::warn!("giving up attempting to connect.");
+                return None;
+            }
+            if err.should_reconnect() {
+                device = self.reconnect_device(device).await;
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        }
+    }
+
+    pub async fn reconnect_device(&self, device: Arc<Device>) -> Arc<Device> {
+        let url = device.url.clone();
+        {
+            let mut inner = self.inner.write().unwrap();
+            inner.devices.retain(|dev| dev.url != url);
+        }
+
+        device.shutdown().await;
+
+        let mut inner = self.inner.write().unwrap();
+        let weak_inner = Arc::downgrade(&self.inner);
+
+        let new_device: Arc<Device> = Device::new(url, weak_inner).into();
+        inner.devices.push(new_device.clone());
+        new_device
+    }
+
     pub fn register_static(&self, dev: &str) {
         let inner = self.inner.write().unwrap();
         inner.registry.register(dev, true);
@@ -145,7 +205,7 @@ pub struct Device {
     #[allow(dead_code)]
     inner: Arc<RwLock<DeviceInner>>,
     #[allow(dead_code)]
-    handles: Vec<OwnedJoinHandle<Result<(), anyhow::Error>>>,
+    handles: Mutex<Vec<OwnedJoinHandle<Result<(), anyhow::Error>>>>,
 }
 
 impl Device {
@@ -166,7 +226,36 @@ impl Device {
         Device {
             url,
             inner,
-            handles,
+            handles: Mutex::new(handles),
+        }
+    }
+
+    pub async fn shutdown(&self) {
+        {
+            let mut handles = self.handles.lock().await;
+
+            for handle in handles.iter() {
+                handle.abort();
+            }
+            for handle in handles.drain(..) {
+                if let Err(e) = handle.await {
+                    if !e.is_cancelled() {
+                        log::error!("device inner task ended with error: {}", e);
+                    }
+                }
+            }
+
+            let handle = { self.inner.write().unwrap().handle.take() };
+            match handle {
+                Some(handle) => {
+                    handle.transport.shutdown().await;
+                    let mplex = handle.service.lock().await;
+                    mplex.shutdown().await;
+                }
+                None => {
+                    log::warn!("shutting down device, but transport was already closed");
+                }
+            }
         }
     }
 
@@ -179,9 +268,14 @@ impl Device {
         inner.handle.as_ref()?.to_hub()
     }
 
-    pub fn to_minidsp(&self) -> Option<MiniDSP<'static>> {
+    pub fn to_minidsp(&self) -> Result<MiniDSP<'static>, MiniDSPError> {
         let inner = self.inner.read().unwrap();
-        inner.handle.as_ref()?.to_minidsp()
+        let result = inner
+            .handle
+            .as_ref()
+            .ok_or(MiniDSPError::DeviceNotReady)?
+            .to_minidsp();
+        result
     }
 
     pub fn device_info(&self) -> Option<DeviceInfo> {
@@ -203,7 +297,7 @@ impl Device {
         log::info!("Connecting to {}", url.as_str());
 
         // Connect to the device by url, and get a frame-level transport
-        let (mut transport, decoder) = {
+        let (mut transportlocal, decoder) = {
             let url = Url2::try_parse(url.as_str()).expect("Device::run had invalid url");
             let stream = transport::open_url(&url).await?;
 
@@ -212,13 +306,11 @@ impl Device {
             let app = app.read().await;
             let (decoder, stream) =
                 logging::transport_logging(stream, app.opts.verbose, app.opts.log.clone());
-
             (transport::Hub::new(stream), decoder)
         };
-
         // Wrap the transport into a multiplexed service for command-level multiplexing
         let service = {
-            let transport = transport
+            let transport = transportlocal
                 .try_clone()
                 .ok_or_else(|| anyhow!("transport closed prematurely"))?;
             let mplex = transport::Multiplexer::from_transport(transport);
@@ -229,13 +321,15 @@ impl Device {
         // Keep going if we do not know the device type, but it has successfully responsed to
         // probing commands. This can be used to support a common subset of features without
         // knowing the device-specific memory layout.
-        let client = Client::new(service.clone());
-        let device_info = client.get_device_info().await.ok();
+        let device_info = {
+            let client = Client::new(service.clone());
+            client.get_device_info().await.ok()
+        };
         let device_spec = device_info.map(|dev| device::probe(&dev));
 
-        let handle = DeviceHandle {
+        let devhandle = DeviceHandle {
             service,
-            transport: transport
+            transport: transportlocal
                 .try_clone()
                 .ok_or_else(|| anyhow!("transport closed prematurely"))?,
             device_spec,
@@ -260,11 +354,11 @@ impl Device {
 
         {
             let mut inner = inner.write().unwrap();
-            inner.handle.replace(handle);
+            inner.handle.replace(devhandle);
         }
 
         // Keep reading messages until the device returns an error/eof
-        while let Some(frame) = transport.next().await {
+        while let Some(frame) = transportlocal.next().await {
             if let Err(e) = frame {
                 log::warn!("Device at {} closing due to an error: {}", &url, &e);
                 break;
@@ -287,11 +381,15 @@ impl Device {
     async fn task(inner: Arc<RwLock<DeviceInner>>) -> anyhow::Result<()> {
         loop {
             // Try to probe the device until we're successful
-            if Self::task_inner(inner.clone()).await.is_ok() {
-                return Ok(());
+            let res = Self::task_inner(inner.clone()).await;
+            match res {
+                Ok(_) => return Ok(()),
+                Err(e) => {
+                    log::warn!("fail to connect: {}", e);
+                }
             }
 
-            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
     }
 }
@@ -318,17 +416,17 @@ pub struct DeviceHandle {
 }
 
 impl DeviceHandle {
-    pub fn to_minidsp(&self) -> Option<MiniDSP<'static>> {
+    pub fn to_minidsp(&self) -> Result<MiniDSP<'static>, MiniDSPError> {
         let client = Client::new(self.service.clone());
 
         let device_info = match self.device_info {
             Some(x) => x,
-            None => futures::executor::block_on(client.get_device_info()).ok()?,
+            None => futures::executor::block_on(client.get_device_info())?,
         };
 
         let spec = self.device_spec.unwrap_or_else(|| probe(&device_info));
         let dsp = MiniDSP::from_client(client, spec, device_info);
-        Some(dsp)
+        Ok(dsp)
     }
 
     pub fn to_hub(&self) -> Option<transport::Hub> {
