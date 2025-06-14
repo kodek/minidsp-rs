@@ -1,5 +1,6 @@
 [workspace]
 members = ["minidsp", "protocol", "daemon", "devtools"]
+resolver = "2"
 
 [profile.release]
 codegen-units = 1

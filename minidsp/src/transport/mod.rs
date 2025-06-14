@@ -70,7 +70,7 @@ pub enum MiniDSPError {
     TransportClosed,
 
     #[error("WebSocket transport error: {0}")]
-    WebSocketError(#[from] ws::Error),
+    WebSocketError(#[from] Box<ws::Error>),
 
     #[error("Multiple concurrent commands were sent")]
     ConcurrencyError,
@@ -118,7 +118,7 @@ pub async fn open_url(url: &Url2) -> Result<Transport, MiniDSPError> {
                 .into_transport())
         }
         "tcp" => Ok(net::open_url(url).await?.into_transport()),
-        "ws" | "wss" => Ok(ws::open_url(url).await?),
+        "ws" | "wss" => Ok(ws::open_url(url).await.map_err(|e| MiniDSPError::WebSocketError(Box::new(e)))?),
         #[cfg(feature = "mock")]
         "mock" => Ok(mock::open_url(url)),
         _ => Err(MiniDSPError::InvalidURL),

@@ -130,7 +130,7 @@ pub struct UnixDevice {
 impl Openable for UnixDevice {
     async fn open(&self) -> anyhow::Result<Transport, MiniDSPError> {
         let uri = self.to_url();
-        Ok(open_unix(&self.path, &uri).await?)
+        Ok(open_unix(&self.path, &uri).await.map_err(|e| MiniDSPError::WebSocketError(Box::new(e)))?)
     }
 
     fn to_url(&self) -> String {
