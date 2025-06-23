@@ -7,7 +7,7 @@ use super::spec::*;
 pub struct Target {}
 impl crate::Target for Target {
     fn filename() -> &'static str {
-        "flexdrc.rs"
+        "flexdl.rs"
     }
 
     fn symbols() -> bimap::BiMap<String, usize> {

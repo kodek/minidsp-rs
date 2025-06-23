@@ -51,8 +51,8 @@ pub mod flex;
 #[cfg(feature = "device_flexhtx")]
 pub mod flexhtx;
 
-#[cfg(feature = "device_flexdrc")]
-pub mod flexdrc;
+#[cfg(feature = "device_flexdl")]
+pub mod flexdl;
 
 pub static GENERIC: Device = Device {
     product_name: "Generic",
