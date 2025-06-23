@@ -22,7 +22,7 @@ pub mod hid;
 #[cfg(feature = "hid")]
 use hidapi::HidError;
 
-use crate::utils::StreamSink;
+use crate::{utils::StreamSink};
 
 pub mod frame_codec;
 pub mod multiplexer;
@@ -95,6 +95,38 @@ pub enum MiniDSPError {
 
     #[error("A device request timed out")]
     Timeout,
+
+    #[error("Device not ready")]
+    DeviceNotReady,
+}
+
+impl MiniDSPError {
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            MiniDSPError::InternalError(err) => {
+                match err.root_cause().downcast_ref::<&MiniDSPError>() {
+                    Some(root_minidsp_err) => root_minidsp_err.is_retryable(),
+                    _ => false
+                }
+            }
+            MiniDSPError::Timeout => true,
+            MiniDSPError::DeviceNotReady => true,
+            _ => false,
+        }
+    }
+
+    pub fn should_reconnect(&self) -> bool {
+        match self {
+            MiniDSPError::InternalError(err) => {
+                match err.root_cause().downcast_ref::<&MiniDSPError>() {
+                    Some(root_minidsp_err) => root_minidsp_err.is_retryable(),
+                    _ => false
+                }
+            }
+            MiniDSPError::Timeout => true,
+            _ => false,
+        }
+    }
 }
 
 #[async_trait]

@@ -4,10 +4,7 @@
 //! channel.
 
 use std::{
-    collections::VecDeque,
-    pin::Pin,
-    sync::{Arc, Mutex},
-    task::{Context, Poll},
+    collections::VecDeque,  pin::Pin, sync::{Arc, Mutex}, task::{Context, Poll}
 };
 
 use bytes::Bytes;
@@ -65,12 +62,11 @@ impl Multiplexer {
 
         // Spawn the receive task
         {
-            let transport = transport.clone();
             let receiver_tx = transport.event_tx.clone();
             let pending_commands = transport.pending_command.clone();
 
             tokio::spawn(async move {
-                let result = transport.recv_loop(recv_send, rx).await;
+                let result = Multiplexer::recv_loop(pending_commands.clone(), recv_send, rx).await;
                 if let Err(e) = result {
                     log::error!("recv loop exit: {:?}", e);
 
@@ -79,6 +75,8 @@ impl Multiplexer {
                     while let Some((_, tx)) = pending.pop_front() {
                         let _ = tx.send(Err(MiniDSPError::TransportClosed));
                     }
+                } else {
+                    log::warn!("recv loop exited without an error");
                 }
                 let mut tx = receiver_tx.lock().unwrap();
                 // Set `receiver_tx` to None to mark this as closed
@@ -119,7 +117,7 @@ impl Multiplexer {
     /// Receives responses from the transport, dispatches responses to the first pending command if it matches, else
     /// pushes it to the events broadcast channel.
     async fn recv_loop(
-        self: Arc<Self>,
+        pending_command: Arc<Mutex<VecDeque<PendingCommandTuple>>>,
         sender: broadcast::Sender<Responses>,
         mut stream: BoxStream,
     ) -> Result<(), MiniDSPError> {
@@ -133,7 +131,7 @@ impl Multiplexer {
             log::trace!("recv: {:02x?}", data);
 
             {
-                let mut pending_cmd = self.pending_command.lock().unwrap();
+                let mut pending_cmd = pending_command.lock().unwrap();
                 let matches = if let Some((cmd, _)) = pending_cmd.front() {
                     cmd.matches_response(&data)
                 } else {
@@ -192,6 +190,15 @@ impl std::ops::Deref for MultiplexerService {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl MultiplexerService {
+    pub async fn shutdown(&self) {
+        let mut write = self.write.lock().await;
+        if let Err(e) = write.close().await {
+            log::error!("error shutting down multiplexer service: {}", e);
+        }
     }
 }
 

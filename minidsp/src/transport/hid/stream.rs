@@ -12,7 +12,7 @@ use futures::{
     Future, FutureExt, Sink, Stream,
 };
 use hidapi::{HidDevice, HidError};
-use pin_project::pin_project;
+use pin_project::{pin_project, pinned_drop};
 
 use super::wrapper::HidDeviceWrapper;
 
@@ -22,7 +22,7 @@ const HID_PACKET_SIZE: usize = 65;
 type SendFuture = Box<dyn Future<Output = Result<(), HidError>> + Send>;
 
 /// A stream of HID reports
-#[pin_project]
+#[pin_project(PinnedDrop)]
 pub struct HidStream {
     device: Arc<HidDeviceWrapper>,
 
@@ -120,6 +120,13 @@ impl Stream for HidStream {
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         self.project().rx.poll_next(cx)
+    }
+}
+
+#[pinned_drop]
+impl PinnedDrop for HidStream {
+    fn drop(self: Pin<&mut Self>) {
+        self.project().rx.close();
     }
 }
 

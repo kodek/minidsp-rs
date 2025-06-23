@@ -2,12 +2,12 @@
 
 use std::{
     pin::Pin,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLock},
     task::{Context, Poll},
 };
 
 use bytes::Bytes;
-use futures::{channel::mpsc, Sink, SinkExt, Stream, StreamExt};
+use futures::{channel::mpsc, stream::SplitSink, Sink, SinkExt, Stream, StreamExt};
 use futures_util::ready;
 use pin_project::pin_project;
 use tokio::sync::broadcast;
@@ -23,88 +23,110 @@ const CAPACITY: usize = 100;
 pub struct Hub {
     // Shared data between clients
     inner: Arc<Mutex<Option<Inner>>>,
+    handles: Arc<Mutex<Vec<OwnedJoinHandle<()>>>>,
 
+    /// Stream where client can read frames from the device.
     #[pin]
     device_rx: BroadcastStream<Bytes>,
+    /// Sink where client can write frames to the device.
     #[pin]
     device_tx: mpsc::Sender<Bytes>,
-
-    // Join handle containing the wrapped transport
-    read_handle: Arc<OwnedJoinHandle<()>>,
-    send_handle: Arc<OwnedJoinHandle<()>>,
 }
 
 impl Hub {
     pub fn new(transport: Transport) -> Self {
         let (read_tx, read_rx) = broadcast::channel::<Bytes>(CAPACITY);
         let (send_tx, mut send_rx) = mpsc::channel(CAPACITY);
-        let (mut device_tx, mut device_rx) = transport.split();
-        let inner = Arc::new(Mutex::new(Some(Inner::new(read_tx))));
+        let (device_tx, mut device_rx) = transport.split();
+
+        let inner = Inner::new(read_tx, device_tx);
 
         let read_handle = {
-            let inner = inner.clone();
-            let read_tx = {
-                let inner = inner.lock().unwrap();
-                inner.as_ref().unwrap().device_rx.clone()
-            };
-
+            let read_tx_shared = inner.device_rx.clone();
             OwnedJoinHandle::new(tokio::spawn(async move {
                 while let Some(frame) = device_rx.next().await {
                     match frame {
                         Ok(frame) => {
-                            if let Err(e) = read_tx.send(frame) {
-                                // receiver is gone
-                                log::error!("read_tx receiver is gone: {}", e);
-                                break;
+                            let result = {
+                                let read_tx = read_tx_shared.write().unwrap();
+                                read_tx.send(frame)
+                            };
+                            match result {
+                                Err(e) => {
+                                    log::error!("send error {}", e);
+                                    break;
+                                }
+                                _ => {}
                             }
                         }
                         Err(e) => {
-                            // The upstream transport reported an error
                             log::error!("recv error {}", e);
                             break;
                         }
                     }
                 }
-                inner.lock().unwrap().take();
             }))
         };
 
         let send_handle = {
+            let transport_sink_shared = inner.transport_sink.clone();
+
             OwnedJoinHandle::new(tokio::spawn({
-                let inner = inner.clone();
                 async move {
+                    let mut transport_sink = transport_sink_shared.lock().await;
                     while let Some(frame) = send_rx.next().await {
-                        let res = device_tx.send(frame).await;
+                        let res = transport_sink.send(frame).await;
                         if let Err(e) = res {
-                            log::error!("device_tx: {}", e);
+                            log::error!("error sending to device: {e}");
                             break;
                         }
                     }
-                    inner.lock().unwrap().take();
                 }
             }))
         };
 
+        let handles = Arc::new(Mutex::new(vec![read_handle, send_handle]));
+
         Self {
-            inner,
+            inner: Arc::new(Mutex::new(Some(inner))),
+            handles,
             device_rx: BroadcastStream::new(read_rx),
             device_tx: send_tx,
+        }
+    }
 
-            send_handle: Arc::new(send_handle),
-            read_handle: Arc::new(read_handle),
+    pub async fn shutdown(&self) {
+        let handles: Vec<_> = { self.handles.lock().unwrap().drain(..).collect() };
+        for h in handles.iter() {
+            h.abort();
+        }
+        let inner = { self.inner.lock().unwrap().take() };
+        if let Some(inner) = inner {
+            let mut transport_sink = inner.transport_sink.lock().await;
+            let res = transport_sink.close().await;
+            if let Err(e) = res {
+                log::error!("error closing transport: {}", e);
+            }
+        }
+        for h in handles {
+            let res = h.await;
+            if let Err(e) = res {
+                if !e.is_cancelled() {
+                    log::error!("error joining handle: {}", e);
+                }
+            }
         }
     }
 
     /// Clones the transport if it is still available, returns None if it has been closed
     pub fn try_clone(&self) -> Option<Self> {
         let inner = self.inner.lock().unwrap();
-        let device_rx = BroadcastStream::new(inner.as_ref()?.device_rx.subscribe());
+        let device_rx = BroadcastStream::new(inner.as_ref()?.device_rx.read().unwrap().subscribe());
         Some(Self {
             inner: self.inner.clone(),
+            handles: self.handles.clone(),
             device_rx,
             device_tx: self.device_tx.clone(),
-            send_handle: self.send_handle.clone(),
-            read_handle: self.read_handle.clone(),
         })
     }
 }
@@ -162,11 +184,18 @@ impl Sink<Bytes> for Hub {
 
 struct Inner {
     // Broadcast sender used for creating receivers through .subscribe()
-    device_rx: broadcast::Sender<Bytes>,
+    device_rx: Arc<RwLock<broadcast::Sender<Bytes>>>,
+    transport_sink: Arc<tokio::sync::Mutex<SplitSink<Transport, Bytes>>>,
 }
 
 impl Inner {
-    pub fn new(device_rx: broadcast::Sender<Bytes>) -> Self {
-        Self { device_rx }
+    pub fn new(
+        device_rx: broadcast::Sender<Bytes>,
+        transport_sink: SplitSink<Transport, Bytes>,
+    ) -> Self {
+        Self {
+            device_rx: Arc::new(RwLock::new(device_rx)),
+            transport_sink: Arc::new(tokio::sync::Mutex::new(transport_sink)),
+        }
     }
 }
