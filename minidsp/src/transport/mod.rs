@@ -22,7 +22,7 @@ pub mod hid;
 #[cfg(feature = "hid")]
 use hidapi::HidError;
 
-use crate::utils::StreamSink;
+use crate::{utils::StreamSink};
 
 pub mod frame_codec;
 pub mod multiplexer;
@@ -70,7 +70,7 @@ pub enum MiniDSPError {
     TransportClosed,
 
     #[error("WebSocket transport error: {0}")]
-    WebSocketError(#[from] ws::Error),
+    WebSocketError(#[from] Box<ws::Error>),
 
     #[error("Multiple concurrent commands were sent")]
     ConcurrencyError,
@@ -95,6 +95,38 @@ pub enum MiniDSPError {
 
     #[error("A device request timed out")]
     Timeout,
+
+    #[error("Device not ready")]
+    DeviceNotReady,
+}
+
+impl MiniDSPError {
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            MiniDSPError::InternalError(err) => {
+                match err.root_cause().downcast_ref::<&MiniDSPError>() {
+                    Some(root_minidsp_err) => root_minidsp_err.is_retryable(),
+                    _ => false
+                }
+            }
+            MiniDSPError::Timeout => true,
+            MiniDSPError::DeviceNotReady => true,
+            _ => false,
+        }
+    }
+
+    pub fn should_reconnect(&self) -> bool {
+        match self {
+            MiniDSPError::InternalError(err) => {
+                match err.root_cause().downcast_ref::<&MiniDSPError>() {
+                    Some(root_minidsp_err) => root_minidsp_err.is_retryable(),
+                    _ => false
+                }
+            }
+            MiniDSPError::Timeout => true,
+            _ => false,
+        }
+    }
 }
 
 #[async_trait]
@@ -118,7 +150,9 @@ pub async fn open_url(url: &Url2) -> Result<Transport, MiniDSPError> {
                 .into_transport())
         }
         "tcp" => Ok(net::open_url(url).await?.into_transport()),
-        "ws" | "wss" => Ok(ws::open_url(url).await?),
+        "ws" | "wss" => Ok(ws::open_url(url)
+            .await
+            .map_err(|e| MiniDSPError::WebSocketError(Box::new(e)))?),
         #[cfg(feature = "mock")]
         "mock" => Ok(mock::open_url(url)),
         _ => Err(MiniDSPError::InvalidURL),

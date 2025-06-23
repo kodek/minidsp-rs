@@ -15,9 +15,9 @@ path = "src/main.rs"
 default = ["serde", "strum", "schemars"]
 
 [dependencies]
-anyhow = "1.0.97"
+anyhow = "1.0.98"
 bytes = "1.10.1"
-clap = "4.5.35"
+clap = "4.5.39"
 confy = "0.5.1"
 env_logger = "0.10.2"
 futures = "0.3.31"
@@ -43,11 +43,11 @@ url2 = "0.0.6"
 
 [dependencies.tokio]
 features = ["rt-multi-thread", "net", "fs", "macros", "io-util"]
-version = "1.44.1"
+version = "1.45.1"
 
 [dependencies.tokio-util]
 features = ["net", "codec", "io"]
-version = "0.7.14"
+version = "0.7.15"
 
 [target.'cfg(target_family="unix")'.dependencies]
 hyperlocal = "0.8.0"

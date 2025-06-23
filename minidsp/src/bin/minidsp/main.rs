@@ -97,7 +97,10 @@ impl Opts {
         let mut bound = false;
         #[cfg(target_family = "unix")]
         if let Some(socket_path) = &self.daemon_sock {
-            builder.with_unix_socket(socket_path).await?;
+            builder
+                .with_unix_socket(socket_path)
+                .await
+                .map_err(|e| MiniDSPError::WebSocketError(Box::new(e)))?;
             bound = true;
         }
 
@@ -114,7 +117,10 @@ impl Opts {
                 .with_url(url)
                 .map_err(|_| MiniDSPError::InvalidURL)?;
         } else if let Some(url) = &self.daemon_url {
-            builder.with_http(url).await?;
+            builder
+                .with_http(url)
+                .await
+                .map_err(|e| MiniDSPError::WebSocketError(Box::new(e)))?;
         } else if let Some(device) = self.hid_option.as_ref() {
             if let Some(ref path) = device.path {
                 builder.with_usb_path(path);
