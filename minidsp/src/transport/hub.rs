@@ -51,12 +51,9 @@ impl Hub {
                                 let read_tx = read_tx_shared.write().unwrap();
                                 read_tx.send(frame)
                             };
-                            match result {
-                                Err(e) => {
-                                    log::error!("send error {}", e);
-                                    break;
-                                }
-                                _ => {}
+                            if let Err(e) = result {
+                                log::error!("send error {}", e);
+                                break;
                             }
                         }
                         Err(e) => {
