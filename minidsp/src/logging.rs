@@ -64,7 +64,7 @@ pub fn transport_logging(
             };
 
             if let Err(e) = result.await {
-                log::error!("transport logging exiting: {}", e);
+                log::error!("transport logging exiting: {e}");
             }
         });
     }

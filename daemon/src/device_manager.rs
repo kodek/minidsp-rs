@@ -178,9 +178,7 @@ impl DeviceManager {
                     }
                     DiscoveryEvent::Timeout { id, last_seen } => {
                         log::info!(
-                            "Device hasn't been seen since timeout period: {} (last seen at {:?})",
-                            id,
-                            last_seen
+                            "Device hasn't been seen since timeout period: {id} (last seen at {last_seen:?})"
                         );
 
                         // Remove that device from the list
@@ -245,7 +243,7 @@ impl Device {
             for handle in handles.drain(..) {
                 if let Err(e) = handle.await {
                     if !e.is_cancelled() {
-                        log::error!("device inner task ended with error: {}", e);
+                        log::error!("device inner task ended with error: {e}");
                     }
                 }
             }
@@ -390,7 +388,7 @@ impl Device {
             match res {
                 Ok(_) => return Ok(()),
                 Err(e) => {
-                    log::warn!("fail to connect: {}", e);
+                    log::warn!("fail to connect: {e}");
                 }
             }
 

@@ -38,7 +38,7 @@ pub async fn advertise_packet(
                     trace!("sent advertisement: {:?}", &packet);
                 }
                 Err(e) => {
-                    error!("couldn't send broadcast datagram: {:?}", e);
+                    error!("couldn't send broadcast datagram: {e:?}");
                 }
             }
         }

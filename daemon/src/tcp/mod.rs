@@ -129,7 +129,7 @@ pub async fn main(cfg: config::TcpServer) -> Result<(), MiniDSPError> {
     let bind_address = cfg.bind_address.as_deref().unwrap_or("0.0.0.0:5333");
 
     if let Err(adv_err) = start_advertise(&app, cfg.clone()) {
-        log::error!("error launching advertisement task: {:?}", adv_err);
+        log::error!("error launching advertisement task: {adv_err:?}");
     }
 
     let listener = TcpListener::bind(&bind_address).await?;
@@ -138,7 +138,7 @@ pub async fn main(cfg: config::TcpServer) -> Result<(), MiniDSPError> {
         select! {
            result = listener.accept() => {
                 let (stream, addr) = result?;
-                log::info!("[{:?}] New connection", addr);
+                log::info!("[{addr:?}] New connection");
 
                 // Find a suitable device to forward this client to
                 let device = {
@@ -156,10 +156,10 @@ pub async fn main(cfg: config::TcpServer) -> Result<(), MiniDSPError> {
                         let result = forward(stream, Box::pin(hub)).await;
 
                         if let Err(e) = result {
-                            log::info!("[{}] Connection closed: {:?}", addr, e);
+                            log::info!("[{addr}] Connection closed: {e:?}");
                         }
 
-                        log::info!("[{:?}] Closed", addr);
+                        log::info!("[{addr:?}] Closed");
                     });
                 }
            },

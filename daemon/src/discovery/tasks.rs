@@ -20,7 +20,7 @@ pub async fn hid_discovery_task(register: impl Fn(&str)) -> Result<()> {
                     }
                 }
                 Err(e) => {
-                    warn!("failed to enumerate hid devices: {}", e);
+                    warn!("failed to enumerate hid devices: {e}");
                 }
             }
         }

@@ -65,7 +65,7 @@ impl HidStream {
                 let mut remaining_tries = 10;
                 let mut result = device.write(&buf);
                 while let Err(e) = result {
-                    log::warn!("retrying usb write: {:?}", e);
+                    log::warn!("retrying usb write: {e:?}");
                     thread::sleep(time::Duration::from_millis(250));
                     result = device.write(&buf);
                     remaining_tries -= 1;
@@ -106,7 +106,7 @@ impl HidStream {
                     }
                     Err(e) => {
                         // device error
-                        log::error!("error in hid receive loop: {:?}", e);
+                        log::error!("error in hid receive loop: {e:?}");
                         tx.unbounded_send(Err(e))?;
                     }
                 }

@@ -48,7 +48,7 @@ impl MockTransport {
                 let cmd = match cmd {
                     Ok(c) => c,
                     Err(e) => {
-                        log::error!("Command decode error: {:?}", e);
+                        log::error!("Command decode error: {e:?}");
                         Commands::Unknown {
                             cmd_id: unframed.get_u8(),
                             payload: BytesWrap(unframed),

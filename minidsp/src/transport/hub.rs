@@ -52,12 +52,12 @@ impl Hub {
                                 read_tx.send(frame)
                             };
                             if let Err(e) = result {
-                                log::error!("send error {}", e);
+                                log::error!("send error {e}");
                                 break;
                             }
                         }
                         Err(e) => {
-                            log::error!("recv error {}", e);
+                            log::error!("recv error {e}");
                             break;
                         }
                     }
@@ -102,14 +102,14 @@ impl Hub {
             let mut transport_sink = inner.transport_sink.lock().await;
             let res = transport_sink.close().await;
             if let Err(e) = res {
-                log::error!("error closing transport: {}", e);
+                log::error!("error closing transport: {e}");
             }
         }
         for h in handles {
             let res = h.await;
             if let Err(e) = res {
                 if !e.is_cancelled() {
-                    log::error!("error joining handle: {}", e);
+                    log::error!("error joining handle: {e}");
                 }
             }
         }
@@ -138,7 +138,7 @@ impl Stream for Hub {
             return Poll::Ready(match res {
                 Some(Ok(obj)) => Some(Ok(obj)),
                 Some(Err(e)) => {
-                    log::warn!("lost messages: {:?}", e);
+                    log::warn!("lost messages: {e:?}");
                     continue;
                 }
                 None => None,

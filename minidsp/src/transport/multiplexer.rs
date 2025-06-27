@@ -71,7 +71,7 @@ impl Multiplexer {
             tokio::spawn(async move {
                 let result = Multiplexer::recv_loop(pending_commands.clone(), recv_send, rx).await;
                 if let Err(e) = result {
-                    log::error!("recv loop exit: {:?}", e);
+                    log::error!("recv loop exit: {e:?}");
 
                     // Clear any pending commands by propagating the error
                     let mut pending = pending_commands.lock().unwrap();
@@ -131,7 +131,7 @@ impl Multiplexer {
                 .await
                 .ok_or(MiniDSPError::TransportClosed)??;
 
-            log::trace!("recv: {:02x?}", data);
+            log::trace!("recv: {data:02x?}");
 
             {
                 let mut pending_cmd = pending_command.lock().unwrap();
@@ -200,7 +200,7 @@ impl MultiplexerService {
     pub async fn shutdown(&self) {
         let mut write = self.write.lock().await;
         if let Err(e) = write.close().await {
-            log::error!("error shutting down multiplexer service: {}", e);
+            log::error!("error shutting down multiplexer service: {e}");
         }
     }
 }
