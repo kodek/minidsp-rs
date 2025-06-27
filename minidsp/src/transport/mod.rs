@@ -22,7 +22,7 @@ pub mod hid;
 #[cfg(feature = "hid")]
 use hidapi::HidError;
 
-use crate::{utils::StreamSink};
+use crate::utils::StreamSink;
 
 pub mod frame_codec;
 pub mod multiplexer;
@@ -106,7 +106,7 @@ impl MiniDSPError {
             MiniDSPError::InternalError(err) => {
                 match err.root_cause().downcast_ref::<&MiniDSPError>() {
                     Some(root_minidsp_err) => root_minidsp_err.is_retryable(),
-                    _ => false
+                    _ => false,
                 }
             }
             MiniDSPError::Timeout => true,
@@ -120,7 +120,7 @@ impl MiniDSPError {
             MiniDSPError::InternalError(err) => {
                 match err.root_cause().downcast_ref::<&MiniDSPError>() {
                     Some(root_minidsp_err) => root_minidsp_err.is_retryable(),
-                    _ => false
+                    _ => false,
                 }
             }
             MiniDSPError::Timeout => true,

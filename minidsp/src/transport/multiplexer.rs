@@ -4,7 +4,10 @@
 //! channel.
 
 use std::{
-    collections::VecDeque,  pin::Pin, sync::{Arc, Mutex}, task::{Context, Poll}
+    collections::VecDeque,
+    pin::Pin,
+    sync::{Arc, Mutex},
+    task::{Context, Poll},
 };
 
 use bytes::Bytes;

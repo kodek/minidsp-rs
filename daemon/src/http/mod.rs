@@ -50,20 +50,23 @@ impl From<&device_manager::Device> for Device {
 }
 
 fn get_device(app: &App, index: usize) -> Result<Arc<device_manager::Device>, Error> {
-    let device_manager = app.device_manager
+    let device_manager = app
+        .device_manager
         .as_ref()
         .ok_or(Error::ApplicationStillInitializing)?;
-    device_manager.get_device(index).ok_or(Error::DeviceNotReady)
+    device_manager
+        .get_device(index)
+        .ok_or(Error::DeviceNotReady)
 }
 
 async fn get_device_instance<'dsp>(app: &App, index: usize) -> Result<MiniDSP<'dsp>, Error> {
-    let device_manager = app.device_manager
+    let device_manager = app
+        .device_manager
         .as_ref()
         .ok_or(Error::ApplicationStillInitializing)?;
     let minidsp = device_manager.get_minidsp(index).await;
     minidsp.ok_or(Error::DeviceNotReady)
 }
-
 
 /// Gets a list of available devices
 async fn get_devices(req: Request<Body>) -> Result<Response<Body>, Error> {

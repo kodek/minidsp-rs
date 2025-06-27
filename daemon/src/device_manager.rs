@@ -8,7 +8,12 @@ use std::{
 use anyhow::{anyhow, Result};
 use futures::{StreamExt, TryFutureExt};
 use minidsp::{
-    client::Client, device::{self, probe}, logging, transport::{self, SharedService}, utils::OwnedJoinHandle, DeviceInfo, MiniDSP, MiniDSPError
+    client::Client,
+    device::{self, probe},
+    logging,
+    transport::{self, SharedService},
+    utils::OwnedJoinHandle,
+    DeviceInfo, MiniDSP, MiniDSPError,
 };
 use tokio::sync::Mutex;
 use url2::Url2;
