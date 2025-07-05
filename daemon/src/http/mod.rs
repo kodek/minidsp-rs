@@ -5,6 +5,7 @@ use futures::{future::join_all, SinkExt, StreamExt};
 use hyper::header::{self, HeaderValue};
 use hyper::{body::HttpBody, Body, Request, Response, Server, StatusCode};
 use hyper_tungstenite::tungstenite::{self, Message};
+use minidsp::Source;
 use minidsp::{
     model::{Config, MasterStatus, StatusSummary},
     utils::{ErrInto, OwnedJoinHandle},
@@ -242,6 +243,82 @@ async fn post_master_status(mut req: Request<Body>) -> Result<Response<Body>, Er
     Ok(serialize_response(&req, status)?)
 }
 
+const VOLUME_INCREMENT: f32 = 0.5;
+enum VolumeDirection {
+    Up,
+    Down,
+    ToggleMute,
+}
+
+impl FromStr for VolumeDirection {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "up" => Ok(VolumeDirection::Up),
+            "down" => Ok(VolumeDirection::Down),
+            "toggle_mute" => Ok(VolumeDirection::ToggleMute),
+            _ => Err(Error::ParseError {
+                reason: "Incorrect value".to_string(),
+            }),
+        }
+    }
+}
+async fn update_volume(req: Request<Body>) -> Result<Response<Body>, Error> {
+    let device_index: usize = parse_param(&req, "deviceIndex")?;
+    let direction: VolumeDirection = parse_param(&req, "direction")?;
+
+    let app = super::APP.get().unwrap();
+    let app = app.read().await;
+    let device = get_device_instance(&app, device_index).await?;
+
+    let status = device.get_master_status().await?;
+    let current_gain = status.volume.unwrap().0;
+    let current_mute = status.mute.unwrap();
+    match direction {
+        VolumeDirection::Down => {
+            device
+                .set_master_volume(minidsp::Gain(current_gain - VOLUME_INCREMENT))
+                .await?;
+        }
+        VolumeDirection::Up => {
+            device
+                .set_master_volume(minidsp::Gain(current_gain + VOLUME_INCREMENT))
+                .await?;
+        }
+        VolumeDirection::ToggleMute => {
+            device.set_master_mute(!current_mute).await?;
+        }
+    };
+    let status = device.get_master_status().await?;
+    Ok(serialize_response(&req, status)?)
+}
+
+async fn update_source(req: Request<Body>) -> Result<Response<Body>, Error> {
+    let device_index: usize = parse_param(&req, "deviceIndex")?;
+    let source: Source = parse_param(&req, "source")?;
+
+    let app = super::APP.get().unwrap();
+    let app = app.read().await;
+    let device = get_device_instance(&app, device_index).await?;
+
+    device.set_source(source).await?;
+    let status = device.get_master_status().await?;
+    Ok(serialize_response(&req, status)?)
+}
+
+async fn update_preset(req: Request<Body>) -> Result<Response<Body>, Error> {
+    let device_index: usize = parse_param(&req, "deviceIndex")?;
+    let preset: u8 = parse_param(&req, "preset")?;
+
+    let app = super::APP.get().unwrap();
+    let app = app.read().await;
+    let device = get_device_instance(&app, device_index).await?;
+
+    device.set_config(preset).await?;
+    let status = device.get_master_status().await?;
+    Ok(serialize_response(&req, status)?)
+}
 /// Updates the device's configuration based on the defined elements. Anything set will be changed and anything else will be ignored.
 /// If a `master_status` object is passed, and the active configuration is changed, it will be applied before anything else. it is therefore
 /// safe to change config and apply other changes to the target config using a single call.
@@ -299,6 +376,9 @@ fn router(server: Option<HttpServer>) -> Router<Body, Error> {
         .get("/devices/get.schema", schema_fn::<Vec<Device>>)
         .get("/devices/:deviceIndex", get_master_status)
         .post("/devices/:deviceIndex", post_master_status)
+        .post("/devices/:deviceIndex/volume/:direction", update_volume)
+        .post("/devices/:deviceIndex/source/:source", update_source)
+        .post("/devices/:deviceIndex/preset/:preset", update_preset)
         .get(
             "/devices/:deviceIndex/get.schema",
             schema_fn::<StatusSummary>,
