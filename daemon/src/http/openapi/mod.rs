@@ -260,6 +260,192 @@ pub fn schema() -> OpenApi {
         });
     }
 
+    // POST /devices/:deviceIndex/volume/:direction
+    {
+        let responses = gen.json_responses::<StatusSummary, FormattedError>(Some(StatusSummary {
+            master: MasterStatus {
+                preset: Some(0),
+                source: Some(Source::Toslink),
+                volume: Some(Gain(-5f32)),
+                mute: Some(false),
+                dirac: Some(false),
+            },
+            input_levels: [-51f32, -50f32].into(),
+            output_levels: [-51f32, -50f32, -127f32, -127f32].into(),
+        }));
+        let param = Parameter {
+            name: "deviceIndex".into(),
+            location: "path".into(),
+            description: None,
+            required: true,
+            deprecated: false,
+            allow_empty_value: false,
+            value: ParameterValue::Schema {
+                style: None,
+                explode: None,
+                allow_reserved: false,
+                schema: Default::default(),
+                example: None,
+                examples: None,
+            },
+            extensions: Default::default(),
+        }
+        .into();
+        let param_direction = Parameter {
+            name: "direction".into(),
+            location: "path".into(),
+            description: None,
+            required: true,
+            deprecated: false,
+            allow_empty_value: false,
+            value: ParameterValue::Schema {
+                style: None,
+                explode: None,
+                allow_reserved: false,
+                schema: Default::default(),
+                example: None,
+                examples: None,
+            },
+            extensions: Default::default(),
+        }
+        .into();
+        gen.add_operation(OperationInfo {
+            path: "/devices/{deviceIndex}/volume/{direction}".to_string(),
+            method: Method::POST,
+            operation: Operation {
+                summary: Some("Status summary".into()),
+                responses,
+                request_body: None,
+                parameters: vec![param, param_direction],
+                ..Default::default()
+            },
+        });
+    }
+
+    // POST /devices/:deviceIndex/source/:source
+    {
+        let responses = gen.json_responses::<StatusSummary, FormattedError>(Some(StatusSummary {
+            master: MasterStatus {
+                preset: Some(0),
+                source: Some(Source::Toslink),
+                volume: Some(Gain(-5f32)),
+                mute: Some(false),
+                dirac: Some(false),
+            },
+            input_levels: [-51f32, -50f32].into(),
+            output_levels: [-51f32, -50f32, -127f32, -127f32].into(),
+        }));
+        let param = Parameter {
+            name: "deviceIndex".into(),
+            location: "path".into(),
+            description: None,
+            required: true,
+            deprecated: false,
+            allow_empty_value: false,
+            value: ParameterValue::Schema {
+                style: None,
+                explode: None,
+                allow_reserved: false,
+                schema: Default::default(),
+                example: None,
+                examples: None,
+            },
+            extensions: Default::default(),
+        }
+        .into();
+        let param_source = Parameter {
+            name: "source".into(),
+            location: "path".into(),
+            description: None,
+            required: true,
+            deprecated: false,
+            allow_empty_value: false,
+            value: ParameterValue::Schema {
+                style: None,
+                explode: None,
+                allow_reserved: false,
+                schema: Default::default(),
+                example: None,
+                examples: None,
+            },
+            extensions: Default::default(),
+        }
+        .into();
+        gen.add_operation(OperationInfo {
+            path: "/devices/{deviceIndex}/source/{source}".to_string(),
+            method: Method::POST,
+            operation: Operation {
+                summary: Some("Status summary".into()),
+                responses,
+                request_body: None,
+                parameters: vec![param, param_source],
+                ..Default::default()
+            },
+        });
+    }
+
+    // POST /devices/:deviceIndex/preset/:preset
+    {
+        let responses = gen.json_responses::<StatusSummary, FormattedError>(Some(StatusSummary {
+            master: MasterStatus {
+                preset: Some(0),
+                source: Some(Source::Toslink),
+                volume: Some(Gain(-5f32)),
+                mute: Some(false),
+                dirac: Some(false),
+            },
+            input_levels: [-51f32, -50f32].into(),
+            output_levels: [-51f32, -50f32, -127f32, -127f32].into(),
+        }));
+        let param = Parameter {
+            name: "deviceIndex".into(),
+            location: "path".into(),
+            description: None,
+            required: true,
+            deprecated: false,
+            allow_empty_value: false,
+            value: ParameterValue::Schema {
+                style: None,
+                explode: None,
+                allow_reserved: false,
+                schema: Default::default(),
+                example: None,
+                examples: None,
+            },
+            extensions: Default::default(),
+        }
+        .into();
+        let param_preset = Parameter {
+            name: "preset".into(),
+            location: "path".into(),
+            description: None,
+            required: true,
+            deprecated: false,
+            allow_empty_value: false,
+            value: ParameterValue::Schema {
+                style: None,
+                explode: None,
+                allow_reserved: false,
+                schema: Default::default(),
+                example: None,
+                examples: None,
+            },
+            extensions: Default::default(),
+        }
+        .into();
+        gen.add_operation(OperationInfo {
+            path: "/devices/{deviceIndex}/preset/{preset}".to_string(),
+            method: Method::POST,
+            operation: Operation {
+                summary: Some("Status summary".into()),
+                responses,
+                request_body: None,
+                parameters: vec![param, param_preset],
+                ..Default::default()
+            },
+        });
+    }
+
     // POST /devices/:deviceIndex/config
     {
         let responses = gen.json_err_response::<FormattedError>();
