@@ -213,7 +213,7 @@ async fn get_master_status(req: Request<Body>) -> Result<Response<Body>, Error> 
                 }
             };
 
-            futures::stream::select_all([status_stream, levels, polled_status].into_iter())
+            futures::stream::select_all([status_stream, levels, polled_status])
                 .forward(websocket)
                 .await?;
 
@@ -517,7 +517,7 @@ pub async fn main(cfg: Option<HttpServer>) -> Result<(), anyhow::Error> {
         .into(),
     );
 
-    join_all(futs.into_iter()).await;
+    join_all(futs).await;
 
     Ok(())
 }

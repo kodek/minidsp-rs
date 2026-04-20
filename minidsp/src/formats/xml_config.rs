@@ -64,10 +64,8 @@ impl Setting {
                     hex: Some(hex),
                     ..
                 } => {
-                    let mut addr = *addr;
-                    for value in &hex.inner {
+                    for (addr, value) in (*addr..).zip(hex.inner.iter()) {
                         buf.put_slice_at(addr, &value.inner);
-                        addr += 1
                     }
                 }
                 _ => {}
@@ -276,7 +274,7 @@ impl FromStr for HexString {
             Ok(HexString {
                 inner: Bytes::from_static(&[0, 0, 0, 0]),
             })
-        } else if s.len() % 2 != 0 {
+        } else if !s.len().is_multiple_of(2) {
             Ok(HexString {
                 inner: Bytes::from(hex::decode("0".to_string() + s)?),
             })
